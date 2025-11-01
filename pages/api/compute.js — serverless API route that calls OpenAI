@@ -1,0 +1,68 @@
+import fetch from "node-fetch";
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  const body = req.body || {};
+  const { full_name, dob, tob, lat, lon, tz_offset_minutes } = body;
+
+  if (!dob || !tob || !lat || !lon) {
+    return res.status(400).json({ error: "Missing fields: dob, tob, lat, lon required" });
+  }
+
+  // Build a clear prompt — keep data factual and ask GPT for a short Hinglish report.
+  const userPrompt = `
+You are an expert Vedic astrology assistant. Given the following birth details, produce:
+1) A short (3-4 lines) Hinglish horoscope summary focusing on career, love, health — human tone, emotional but concise.
+2) A short, explicit list of key signals (like "Sun in 10th — career focus") based only on raw planetary signs that you must infer from the provided "planets_hint" (see below).
+Always be transparent if you are estimating planet positions; do not fabricate numeric positions. Keep output only in Hinglish.
+
+Birth details:
+Name: ${full_name || "N/A"}
+Date (YYYY-MM-DD): ${dob}
+Time (HH:MM 24h): ${tob}
+Latitude: ${lat}
+Longitude: ${lon}
+TZ offset (minutes): ${tz_offset_minutes || "unknown"}
+
+Planets hint (if present): We do not compute exact ephemeris here; assume the user wants a friendly, helpful reading. Use gentle language, action steps, and avoid absolute predictions.
+Respond as JSON with fields: "horoscope" (string), "bullets" (array of short strings).
+`;
+
+  try {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return res.status(500).json({ error: "OPENAI_API_KEY not configured in environment" });
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openaiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini", // or "gpt-4o" / "gpt-4o-mini" — you can change based on access
+        messages: [{ role: "system", content: "You are a helpful astrology assistant." }, { role: "user", content: userPrompt }],
+        max_tokens: 400,
+        temperature: 0.6
+      })
+    });
+
+    const data = await resp.json();
+    const choice = data?.choices?.[0]?.message?.content || "";
+    // Try to parse JSON if model returned JSON; else return raw text in 'horoscope'
+    let parsed = null;
+    try { parsed = JSON.parse(choice); } catch (e) { }
+
+    const result = {
+      raw_model: choice,
+      horoscope: parsed?.horoscope || choice,
+      bullets: parsed?.bullets || []
+    };
+
+    return res.status(200).json(result);
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message || "Unknown error" });
+  }
+}
