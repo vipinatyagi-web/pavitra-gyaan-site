@@ -1,0 +1,11 @@
+Pavitra Gyaan — Next.js + OpenAI demo
+
+Steps to deploy:
+1. Push this repo to GitHub.
+2. Go to https://vercel.com → Import Project → select this GitHub repo.
+3. In Vercel Project Settings → Environment Variables, add:
+   - Key: OPENAI_API_KEY
+   - Value: <your OpenAI API key>
+4. Deploy. Visit homepage and test.
+
+Note: This implementation uses OpenAI to generate text. For higher astrological precision use Swiss Ephemeris calculations on a backend (Python with pyswisseph).
